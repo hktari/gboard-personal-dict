@@ -1,0 +1,23 @@
+{
+  "name": "gboard-personal-dict",
+  "version": "1.0.0",
+  "description": "Tool to enhance GBoard's personal dictionary by extracting vocabulary from SMS data",
+  "main": "personal_dictionary.js",
+  "scripts": {
+    "filter": "node filter-sms.js",
+    "generate": "node personal_dictionary.js",
+    "pack": "node pack_dictionary.js"
+  },
+  "keywords": [
+    "gboard",
+    "dictionary",
+    "sms"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "sax": "^1.4.1",
+    "xml2js": "^0.6.2"
+  }
+}

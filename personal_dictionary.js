@@ -21,7 +21,7 @@
  *
  * Usage: node personal_dictionary.js [input_file] [output_file]
  *   - input_file defaults to 'data/filtered_sms.xml'
- *   - output_file defaults to 'personal_dictionary.txt'
+ *   - output_file defaults to 'output/personal_dictionary.txt'
  */
 
 const fs = require("fs");
@@ -29,26 +29,32 @@ const xml2js = require("xml2js");
 
 // Get input and output file paths from command-line arguments
 const inputPath = process.argv[2] || "data/filtered_sms.xml";
-const outputPath = process.argv[3] || "output/personal_dictionary.txt";
+// Generate ISO timestamp for output filename (YYYY-MM-DDTHH-mm-ss)
+const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+const outputPath =
+  process.argv[3] || `output/personal_dictionary_${timestamp}.txt`;
 
-// Frequency threshold for including bigrams
-const BIGRAM_THRESHOLD = 3;
+// Constants for filtering
+const UNIGRAM_THRESHOLD = 5; // Minimum frequency for single words
+const BIGRAM_THRESHOLD = 3; // Minimum frequency for word pairs
+const MIN_WORD_LENGTH = 2; // Minimum length for words
 
-// Enhanced regex to capture words including apostrophes and hyphens (with Unicode support)
+// Function to extract words from text, supporting Unicode characters
 function getWords(text) {
   if (!text) return [];
-  // Matches words with letters, numbers, underscores, apostrophes, and hyphens
-  const matches = text.match(/\b[\w'-]+\b/gu);
-  return matches ? matches : [];
+  // Match Unicode letters, numbers, apostrophes, and hyphens
+  // \p{L} matches any Unicode letter
+  // \p{N} matches any Unicode number
+  const matches = text.match(/\b[\p{L}\p{N}_'-]+\b/gu);
+  return matches
+    ? matches.filter((word) => word.length >= MIN_WORD_LENGTH)
+    : []; // Filter out single-character words
 }
 
-// Generate bigrams (two-word phrases) from an array of tokens
-function getBigrams(tokens) {
-  const bigrams = [];
-  for (let i = 0; i < tokens.length - 1; i++) {
-    bigrams.push(tokens[i] + " " + tokens[i + 1]);
-  }
-  return bigrams;
+// Function to generate bigrams from a list of words
+function getBigrams(words) {
+  if (words.length < 2) return [];
+  return words.slice(0, -1).map((word, i) => `${word} ${words[i + 1]}`);
 }
 
 // Read the input XML file
@@ -78,16 +84,17 @@ fs.readFile(inputPath, "utf8", (err, data) => {
     // Filter out incoming SMS messages (only keep outgoing messages, type '2')
     smsEntries = smsEntries.filter((sms) => sms.type === "2");
 
-    // Use a Set to collect unique unigrams
-    const unigramSet = new Set();
-    // Object to count frequency of bigrams
+    // Object to count frequency of unigrams and bigrams
+    const unigramFreq = {};
     const bigramFreq = {};
 
     smsEntries.forEach((sms) => {
       const body = sms.body;
-      const tokens = getWords(body).map((word) => word.toLowerCase());
+      const tokens = getWords(body)
+        .map((word) => word.toLowerCase())
+        .filter((word) => word.length >= MIN_WORD_LENGTH); // Apply minimum length filter
       tokens.forEach((token) => {
-        unigramSet.add(token);
+        unigramFreq[token] = (unigramFreq[token] || 0) + 1;
       });
       const bigrams = getBigrams(tokens);
       bigrams.forEach((bigram) => {
@@ -100,9 +107,14 @@ fs.readFile(inputPath, "utf8", (err, data) => {
       (bigram) => bigramFreq[bigram] >= BIGRAM_THRESHOLD
     );
 
-    // Combine unigrams and frequent bigrams into one set
+    // Filter unigrams based on frequency threshold
+    const frequentUnigrams = Object.keys(unigramFreq).filter(
+      (token) => unigramFreq[token] >= UNIGRAM_THRESHOLD
+    );
+
+    // Combine frequent unigrams and frequent bigrams into one set
     const dictionaryEntries = new Set();
-    unigramSet.forEach((word) => dictionaryEntries.add(word));
+    frequentUnigrams.forEach((word) => dictionaryEntries.add(word));
     frequentBigrams.forEach((bg) => dictionaryEntries.add(bg));
 
     // Convert to array and sort alphabetically
@@ -115,6 +127,17 @@ fs.readFile(inputPath, "utf8", (err, data) => {
       // Otherwise, also leave it empty for now (could be later extended to generate custom shortcuts)
       lines.push(`\t${entry}\t\n`);
     });
+
+    // Append statistics at the end
+    lines.push("\n# Statistics:\n");
+    lines.push(`Total outgoing SMS processed: ${smsEntries.length}\n`);
+    lines.push(`Frequent unigrams count: ${frequentUnigrams.length}\n`);
+    lines.push(`Frequent bigrams count: ${frequentBigrams.length}\n`);
+    lines.push(`Total dictionary entries: ${uniqueEntries.length}\n`);
+    lines.push("\n# Configuration:\n");
+    lines.push(`Unigram frequency threshold: ${UNIGRAM_THRESHOLD}\n`);
+    lines.push(`Bigram frequency threshold: ${BIGRAM_THRESHOLD}\n`);
+    lines.push(`Minimum word length: ${MIN_WORD_LENGTH}\n`);
 
     // Write the dictionary entries to the output file
     fs.writeFile(outputPath, lines.join(""), "utf8", (err) => {
