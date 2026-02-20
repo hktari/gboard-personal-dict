@@ -6,7 +6,8 @@
   "scripts": {
     "filter": "node filter-sms.js",
     "generate": "node personal_dictionary.js",
-    "pack": "node pack_dictionary.js"
+    "pack": "node pack_dictionary.js",
+    "unpack": "node unpack_dictionary.js"
   },
   "keywords": [
     "gboard",
@@ -18,6 +19,7 @@
   "dependencies": {
     "archiver": "^7.0.1",
     "sax": "^1.4.1",
+    "unzipper": "^0.12.3",
     "xml2js": "^0.6.2"
   }
 }
